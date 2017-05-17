@@ -3,6 +3,7 @@ import cv2
 import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import glob
+import math
 
 # Calibrates the camera
 def calibrate(images):
@@ -32,42 +33,94 @@ def calibrate(images):
             imgpoints.append(corners)
             objpoints.append(objp)
 
-            # img = cv2.drawChessboardCorners(img, (9,6), corners, ret)
-            # plt.imshow(img)
-            # plt.show()
-
     # Calibrate the camera using opencv to find the camera matrix and distortion coef dist.
     return cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
 
+def mag_dir(out_x, out_y):
+    """
+    Calculate gradient magnitude and direction matrix
+    """
 
-# # Read any distorted image
-# img = mpimg.imread('camera_cal/calibration2.jpg')
-# plt.imshow(img)
-# plt.show()
-# dst = cv2.undistort(img, mtx, dist, None, mtx)
-# plt.imshow(dst)
-# plt.show()
+    mag = np.sqrt(
+                np.add
+                     (
+                    np.square(out_x) , np.square(out_y)
+                      )
+                 )
 
-def combined_sobelx_s_channel(img, thresh_min=20, thresh_max=100, s_thresh_min=170, s_thresh_max=255):
+    dir = np.arctan2(out_y, out_x)
+
+    dir = np.multiply(dir, 180/math.pi)
+
+    # print np.min(dir)   # 0
+    # print np.max(dir)   # 89
+
+    # plt.hist(mag,8)
+    # plt.show()
+
+    return mag, dir
+
+def show_angle(out_weight, mag_final, dir_final, min_mag, theta_min, theta_max):
+    """
+        Return points based on magnitude and angle constraints
+    """
+
+
+    out_img = np.multiply(
+        (
+            # (mag_final > min_mag) &
+            (dir_final >= theta_min) &
+            (dir_final <= theta_max)
+        ).astype(int),
+
+        out_weight
+    ).astype('uint8')
+
+    return out_img
+
+def combined_sobelx_s_channel(img, thresh_min=30, thresh_max=130, s_thresh_min=50, s_thresh_max=200):
     # Convert to HLS color space and separate the S channel
     hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
     s_channel = hls[:,:,2]
+    h_channel = hls[:,:,0]
 
     gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+
+    s_binary = np.zeros_like(s_channel)
+    s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
+
+    thresh = (30, 100)
+    h_binary = np.zeros_like(h_channel)
+    h_binary[(h_channel > thresh[0]) & (h_channel <= thresh[1])] = 1
 
     # Sobel x
     sobelx = cv2.Sobel(gray, cv2.CV_64F, 1, 0) # Take the derivative in x
     abs_sobelx = np.absolute(sobelx) # Absolute x derivative to accentuate lines away from horizontal
     scaled_sobel = np.uint8(255*abs_sobelx/np.max(abs_sobelx))
 
+    # out_x = cv2.Sobel(h_channel, cv2.CV_64F, 1, 0)    # x gradient
+    # out_y = cv2.Sobel(h_channel, cv2.CV_64F, 0, 1)    # y gradient
+
+
+    # out_x = cv2.convertScaleAbs(out_x)
+    # out_y = cv2.convertScaleAbs(out_y)
+
+    # out_weight = cv2.addWeighted(out_x, 0.5, out_y, 0.5,0)  # x and y weighted
+
+    # mag, dir = mag_dir(out_x, out_y)
+    # out_final = show_angle(out_weight, mag, dir, 1, 30, 100)
+    
     sxbinary = np.zeros_like(scaled_sobel)
     sxbinary[(scaled_sobel >= thresh_min) & (scaled_sobel <= thresh_max)] = 1
 
-    s_binary = np.zeros_like(s_channel)
-    s_binary[(s_channel >= s_thresh_min) & (s_channel <= s_thresh_max)] = 1
+    # plt.imshow(h_binary, cmap="gray")
+    # plt.show()
+
+    # New image to hold combined data
+    
 
     combined_binary = np.zeros_like(sxbinary)
-    combined_binary[(s_binary == 1) | (sxbinary == 1)] = 1
+    combined_binary[((h_binary == 1) & (s_binary == 1)) | (sxbinary == 1)] = 1
 
     return combined_binary
 
@@ -78,13 +131,14 @@ def warp(img):
     imgx = img.shape[1]
     imgy = img.shape[0]
 
-    x1 = 130
-    y1 = 660
-    x2 = 550
-    y2 = 460
-    x3 = 730
+    # Warp co-ordinates
+    x1 = 270
+    y1 = 675
+    x2 = 587
+    y2 = 455
+    x3 = 693
     y3 = y2
-    x4 = (imgx - x1)
+    x4 = 1035
     y4 = y1 
 
     src = np.float32(
@@ -94,27 +148,28 @@ def warp(img):
           [x4, y4]])
 
     # plt.imshow(img)
-    # plt.plot(x1, y1, '.')
-    # plt.plot(x2, y2, '.')
-    # plt.plot(x3, y3, '.')
-    # plt.plot(x4, y4, '.')
+    # plt.plot(x1, y1, x2, y2, '.')
+    # plt.plot(x2, y2, x3, y3, '.')
+    # plt.plot(x3, y3, x4, y4, '.')
+    # plt.plot(x4, y4, x1, y1, '.')
     # plt.show()
 
     dst = np.float32(
         [[x1, y1],
-          [x1, imgy - y1],
-          [x4, imgy - y1],
+          [x1, 20],
+          [x4, 20],
           [x4, y4]])
 
     # plt.imshow(img)
-    # plt.plot(x1, y1, '.')
-    # plt.plot(x1, imgy - y1, '.')
-    # plt.plot(x4, imgy - y1, '.')
-    # plt.plot(x4, y4, '.')
+    # plt.plot(x1, y1, x1, 20, '.')
+    # plt.plot(x1, 20, x4, 20, '.')
+    # plt.plot(x4, 20, x4, y4, '.')
+    # plt.plot(x4, y4, x1, y1, '.')
     # plt.show()
 
     M = cv2.getPerspectiveTransform(src, dst)
-    return cv2.warpPerspective(img, M, img_size, flags=cv2.INTER_LINEAR)
+    wimg = cv2.warpPerspective(img, M, img_size, flags=cv2.INTER_LINEAR)
+    return wimg
 
 def unwarp(img):
     img_size = (img.shape[1], img.shape[0])
@@ -122,13 +177,13 @@ def unwarp(img):
     imgx = img.shape[1]
     imgy = img.shape[0]
 
-    x1 = 130
-    y1 = 660
-    x2 = 550
-    y2 = 460
-    x3 = 730
+    x1 = 270
+    y1 = 675
+    x2 = 587
+    y2 = 455
+    x3 = 693
     y3 = y2
-    x4 = (imgx - x1)
+    x4 = 1035
     y4 = y1 
 
     src = np.float32(
@@ -138,16 +193,16 @@ def unwarp(img):
           [x4, y4]])
 
     # plt.imshow(img)
-    # plt.plot(x1, y1, '.')
-    # plt.plot(x2, y2, '.')
-    # plt.plot(x3, y3, '.')
-    # plt.plot(x4, y4, '.')
+    # plt.plot(x1, y1, x2, y2)
+    # plt.plot(x2, y2, x3, y3)
+    # plt.plot(x3, y3, x4, y4)
+    # plt.plot(x4, y4, x1, y1)
     # plt.show()
 
     dst = np.float32(
         [[x1, y1],
-          [x1, imgy - y1],
-          [x4, imgy - y1],
+          [x1, 20],
+          [x4, 20],
           [x4, y4]])
 
     # plt.imshow(img)
@@ -162,11 +217,10 @@ def unwarp(img):
 
 
 def fit_poly(binary_warped, left_fit=None, right_fit=None):
+    out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
     if left_fit == None and right_fit == None:
         print("Using sliding window")
         histogram = np.sum(binary_warped[binary_warped.shape[0]//2:,:], axis=0)
-        # Create an output image to draw on and  visualize the result
-        out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
         # Find the peak of the left and right halves of the histogram
         # These will be the starting point for the left and right lines
         midpoint = np.int(histogram.shape[0]/2)
@@ -235,8 +289,8 @@ def fit_poly(binary_warped, left_fit=None, right_fit=None):
         left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
         right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
-        out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-        out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
+        # out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
+        # out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
         # plt.imshow(out_img)
         # plt.plot(left_fitx, ploty, color='yellow')
         # plt.plot(right_fitx, ploty, color='yellow')
@@ -265,12 +319,6 @@ def fit_poly(binary_warped, left_fit=None, right_fit=None):
         left_fitx = left_fit[0]*ploty**2 + left_fit[1]*ploty + left_fit[2]
         right_fitx = right_fit[0]*ploty**2 + right_fit[1]*ploty + right_fit[2]
 
-        # Create an image to draw on and an image to show the selection window
-        out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
-        # Color in left and right line pixels
-        out_img[nonzeroy[left_lane_inds], nonzerox[left_lane_inds]] = [255, 0, 0]
-        out_img[nonzeroy[right_lane_inds], nonzerox[right_lane_inds]] = [0, 0, 255]
-
     window_img = np.zeros_like(out_img)
     # Generate a polygon to illustrate the search window area
     # And recast the x and y points into usable format for cv2.fillPoly()
@@ -282,19 +330,19 @@ def fit_poly(binary_warped, left_fit=None, right_fit=None):
     right_line_pts = np.hstack((right_line_window1, right_line_window2))
 
     # Draw the lane onto the warped blank image
-    cv2.fillPoly(window_img, np.int_([left_line_pts]), (0,255, 0))
-    cv2.fillPoly(window_img, np.int_([right_line_pts]), (255,0, 0))
+    cv2.fillPoly(window_img, np.int_([left_line_pts]), (255,0, 0))
+    cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,0, 255))
     # print("windowimg: "+str(window_img.shape))
     # print("outimg: "+str(out_img.shape))
     # resultimg = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
-    # print("resultimg: "+str(resultimg.shape))
-    # plt.imshow(result)
+    # # print("resultimg: "+str(resultimg.shape))
+    # plt.imshow(resultimg)
     # # plt.plot(left_fitx, ploty, color='yellow')
     # # plt.plot(right_fitx, ploty, color='yellow')
     # # plt.xlim(0, 1280)
     # # plt.ylim(720, 0)
-    # plt.show()
-    return ploty, leftx, rightx, lefty, righty, left_fit, right_fit, window_img
+    plt.show()
+    return ploty, leftx, rightx, lefty, righty, left_fit, right_fit, left_fitx, right_fitx, window_img
 
 
 def calculate_radii(ploty, leftx, rightx, lefty, righty):
@@ -313,31 +361,44 @@ def calculate_radii(ploty, leftx, rightx, lefty, righty):
     # print(left_curverad, 'm', right_curverad, 'm')
     return left_curverad, right_curverad
 
+def car_location(left_fit, right_fit, imagex, imagey, cfactor):
+    leftlanepoint = left_fit[0]*imagey**2 + left_fit[1]*imagey + left_fit[2]
+    rightlanepoint = right_fit[0]*imagey**2 + right_fit[1]*imagey + right_fit[2]
+    lanecenter = ((leftlanepoint + rightlanepoint)/2)
+    camcenter = (imagex/2)
+    carpos =  (camcenter - lanecenter) * cfactor
+    return int(camcenter), int(lanecenter), carpos
+
 ret, mtx, dist, rvecs, tvecs = calibrate('camera_cal/calibration*.jpg')
 
-# img = mpimg.imread('test_images/test2.jpg')
+# img = mpimg.imread('crit_images/first/img_574.jpg')
+# #img = mpimg.imread('crit_images/second/img_1045.jpg')
+
+# # plt.imshow(img)
+# # plt.show()
 # dst = cv2.undistort(img, mtx, dist, None, mtx)
-# plt.imshow(dst)
-# plt.show()
+# # plt.imshow(dst)
+# # plt.show()
 # csimg = combined_sobelx_s_channel(dst)
 # plt.imshow(csimg,  cmap='gray')
 # plt.show()
 # binary_warped = warp(csimg)
-# plt.imshow(binary_warped,  cmap='gray')
-# plt.show()
+# # plt.imshow(binary_warped,  cmap='gray')
+# # plt.show()
 
-# ploty, leftx, rightx, lefty, righty, left_fit, right_fit, resultimg = fit_poly(binary_warped)
+# ploty, leftx, rightx, lefty, righty, left_fit, right_fit, left_fitx, right_fitx, resultimg = fit_poly(binary_warped)
 
 # left_curverad, right_curverad = calculate_radii(ploty, leftx, rightx, lefty, righty)
 
 # binary_unwarped = unwarp(resultimg)
-# plt.imshow(binary_unwarped)
-# plt.show()
+# # plt.imshow(binary_unwarped)
+# # plt.show()
 
 # # print("dst: "+str(dst.shape)+str(dst.shape[1])+" "+str(dst.shape[0]))
 # # print("resultimg: "+str(resultimg.shape)+str(resultimg.shape[1])+" "+str(resultimg.shape[0]))
 # finalimg = cv2.addWeighted(dst, 1, binary_unwarped, 0.8, 0)
-
+# #cv2.circle(finalimg,(finalimg.shape[1]//2,finalimg.shape[0]-20), 20, (0,0,255), -1)
+# #cv2.circle(finalimg,(car_location(leftx,rightx),finalimg.shape[0]-60), 20, (255,0,0), -1)
 # plt.imshow(finalimg)
 # plt.show()
 
@@ -346,30 +407,63 @@ videofile = cv2.VideoCapture('project_video.mp4')
 left_fit = None 
 right_fit = None 
 
+i=-1
 while(videofile.isOpened()):
     ret, frame = videofile.read()
-
+    i = i + 1
+    if i < 900:
+        continue
     dst = cv2.undistort(frame, mtx, dist, None, mtx)
     csimg = combined_sobelx_s_channel(dst)
     binary_warped = warp(csimg)
 
-    ploty, leftx, rightx, lefty, righty, left_fit, right_fit, resultimg = fit_poly(binary_warped, left_fit, right_fit)
+    ploty, leftx, rightx, lefty, righty, left_fit, right_fit, left_fitx, right_fitx, resultimg = fit_poly(binary_warped, left_fit, right_fit)
 
     left_curverad, right_curverad = calculate_radii(ploty, leftx, rightx, lefty, righty)
 
-    binary_unwarped = unwarp(resultimg)
-    finalimg = cv2.addWeighted(dst, 1, binary_unwarped, 0.8, 0)
+    # binary_unwarped = unwarp(resultimg)
+    # finalimg = cv2.addWeighted(dst, 1, binary_unwarped, 0.8, 0)
+
+    warp_zero = np.zeros_like(binary_warped).astype(np.uint8)
+    color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
+
+    # Recast the x and y points into usable format for cv2.fillPoly()
+    pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+    pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+    pts = np.hstack((pts_left, pts_right))
+
+    # print("Left: "+str(pts_left.shape))
+    # print("Rgiht: "+str(pts_right.shape))
+
+    # Draw the lane onto the warped blank image
+    cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
+
+    # Warp the blank back to original image space using inverse perspective matrix (Minv)
+    newwarp = unwarp(color_warp)
+    # Combine the result with the original image
+    result = cv2.addWeighted(dst, 1, newwarp, 0.3, 0)
 
     font = cv2.FONT_HERSHEY_SIMPLEX
-    turnstr = "Left"
-    if right_curverad < left_curverad:
-        turnstr = "Right"
-    elif right_curverad == left_curverad:
-        turnstr = "Straight"
 
-    cv2.putText(finalimg, str("Curvature "+str((left_curverad+right_curverad)//2)+" (m)") ,(10,20), font, 0.5,(255,255,255),1,cv2.LINE_AA)
+    camcenter, lanecenter, carpos = car_location(left_fit, right_fit, dst.shape[1], dst.shape[0], (3.7/700))
 
-    cv2.imshow('frame',finalimg)
+    # cv2.circle(result,(result.shape[1]//2,result.shape[0]-20), 20, (0,0,255), -1)
+    # cv2.circle(result,(int(camcenter),result.shape[0]), 20, (255,0,0), -1)
+    # cv2.circle(result,(int(lanecenter),result.shape[0]-30), 20, (0,0,255), -1)
+    # actpos = (dst.shape[1]//2) - carpos
+    if carpos > 0:
+        msg = "Right of center "+str(abs(round(carpos, 2)))+" (m)"
+    else:
+        msg = "Left of center "+str(abs(round(carpos, 2)))+" (m)"
+
+    
+
+    cv2.putText(result, str("Curvature: "+str((left_curverad+right_curverad)//2)+" (m)") ,(10,20), font, 0.5,(255,255,255),1,cv2.LINE_AA)
+    cv2.putText(result, str("Car position:  "+msg) ,(10,50), font, 0.5,(255,255,255),1,cv2.LINE_AA)
+
+    cv2.imshow('frame',result)
+    
+    #cv2.imwrite('img_'+str(i)+'.jpg',frame)
     if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
