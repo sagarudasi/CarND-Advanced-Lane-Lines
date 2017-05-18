@@ -123,20 +123,56 @@ Following is the result of perpective transformation on the test image -
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
-Then I did some other stuff and fit my lane lines with a 2nd order polynomial kinda like this:
+At this point, we have a perspective transformed (bird eye view) filtered and undistored image to process. 
 
-![alt text][image5]
+Following is the resulted binary image -
+![Perspective transformed filterted and undistorted image][image10]
+
+As described in the CarND training, we can plot a histogram to see where the pixels are bright (i.e. probably the lane line starts there) and we can then use sliding window to find out other pixels that belongs to the left and right lanes.
+
+The function "fit_poly" in the main.py is responsible in doing that.
+
+Also, once we find the pixels, we can then limit our search area for the next frame onwards to do a targetted search of lane lines in the area where there is more probability. This will reduce the error of getting the unwanted noise being detected as lane lines as it will fall outside of our search area.
+
+I then used the numpy function "polyfit" to fit a second order polynomial to left and right lane lines -
+
+Following is the result of the sliding window and poly fit -
+![Lane lines on transformed image][image11]
+
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
 
-I did this in lines # through # in my code in `my_other_file.py`
+Functions "calculate_radii" and "car_location" are responsible for computing the radius and car position in world space respectively.
+
+In order to calculate the radius, we can utilize the final lane points and fit a poly line inside it.
+Following code was taken from the Udacity training slide to calculate the radius.
+```python
+  left_fit_cr = np.polyfit(lefty*ym_per_pix, leftx*xm_per_pix, 2)
+  right_fit_cr = np.polyfit(righty*ym_per_pix, rightx*xm_per_pix, 2)
+  left_curverad = ((1 + (2*left_fit_cr[0]*y_eval*ym_per_pix + left_fit_cr[1])**2)**1.5) / np.absolute(2*left_fit_cr[0])
+  right_curverad = ((1 + (2*right_fit_cr[0]*y_eval*ym_per_pix + right_fit_cr[1])**2)**1.5) / np.absolute(2*right_fit_cr[0])
+```
+
+We need the factor that how much one pixel corresponds to in meters in real world space. These factors are xm_per_pix and ym_per_pix. Following values were taken for each respectively - 3.7/700 30/720. 
+
+The left and right lane radius were then averaged out compute the estimated radius of the lane curvature.
+
+![Lane curvature][image12]
+
+To compute the car location in the lane, I used the camera frame center as reference (since the camera is fixed on car). Then I computed the center of the lower section of lane by dividing x co-ordinate at 0th pixel of left and right lane from bottom. I computed these value from the generated poly line of second order and max y co-ordinate.
+
+Diffence between the frame center and the above point was used as a measure of car location in the lane.
+
+![Car position][image13]
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
-I implemented this step in lines # through # in my code in `yet_another_file.py` in the function `map_lane()`.  Here is an example of my result on a test image:
+Finally all the above data was combined and a result image as following was generated.
 
-![alt text][image6]
+![Final result][image14]
 
+Polygon of the shape of fitted polyline was drawn on top of lane to visualize the lane area generated using the above pipeline.
+The image was mutated in the fit_poly function only and it was unwarped on the original undistorted image.
 ---
 
 ### Pipeline (video)
