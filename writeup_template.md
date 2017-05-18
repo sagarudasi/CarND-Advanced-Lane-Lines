@@ -187,4 +187,11 @@ Here's a [link to my video result](./project_video.mp4)
 
 #### 1. Briefly discuss any problems / issues you faced in your implementation of this project.  Where will your pipeline likely fail?  What could you do to make it more robust?
 
-Here I'll talk about the approach I took, what techniques I used, what worked and why, where the pipeline might fail and how I might improve it if I were going to pursue this project further.  
+The difficult part was to identify a combination of channels that works best on the two patches. In order to understand that, I will have to understand the color space of images fully.
+
+Another part was the sobel function where I faced difficulty. One improvement will be to add gradient filter so that it picks lines in specific gradient range. This will help in 
+
+Pipeline is likely to fail in following circumstances -
+If the noise is greater (like in the challenge video) and the lane lines are very close to the boundary of the road where it is difficult to filter lane and road boundaries.
+If lane lines are very inconsistent and lot of gap is there in between (i.e. lines are missing for certain time).
+
