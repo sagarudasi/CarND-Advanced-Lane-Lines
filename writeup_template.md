@@ -39,60 +39,87 @@ The goals / steps of this project are the following:
 
 You're reading it!
 
+Note: The code for this project is in main.py file.
+
 ### Camera Calibration
 
 #### 1. Briefly state how you computed the camera matrix and distortion coefficients. Provide an example of a distortion corrected calibration image.
 
-The code for this step is contained in the first code cell of the IPython notebook located in "./examples/example.ipynb" (or in lines # through # of the file called `some_file.py`).  
+Images in the project video are distorted. We need to undistort it before we pass it further in pipleline. 
+In order to fix that I created a function calibrate which in turn, uses the OpenCV function calibrateCamera.
 
-I start by preparing "object points", which will be the (x, y, z) coordinates of the chessboard corners in the world. Here I am assuming the chessboard is fixed on the (x, y) plane at z=0, such that the object points are the same for each calibration image.  Thus, `objp` is just a replicated array of coordinates, and `objpoints` will be appended with a copy of it every time I successfully detect all chessboard corners in a test image.  `imgpoints` will be appended with the (x, y) pixel position of each of the corners in the image plane with each successful chessboard detection.  
+Camera frame can be undistorted using OpenCV function undistort and for that we need the camera matrix and distortion coefficients which are the result of camera calibration process.
 
-I then used the output `objpoints` and `imgpoints` to compute the camera calibration and distortion coefficients using the `cv2.calibrateCamera()` function.  I applied this distortion correction to the test image using the `cv2.undistort()` function and obtained this result: 
+For calculating these parameters, there is a set of chessboard images provided which are captured with the same camera. I used the OpenCV function findChessboardCorners which resulted in the image points and created another set of corners for reference called object points. 
 
-![alt text][image1]
+I then passed these points to calibrate function which in turn retured the camera matrix and distortion coefficients by comparing the image points and the reference object points.
+These values were then used to undistort the image. 
+
+Following is the result - 
+
+![Distorted original image][image1] ![Un-distorted image][image2]
 
 ### Pipeline (single images)
 
 #### 1. Provide an example of a distortion-corrected image.
 
-To demonstrate this step, I will describe how I apply the distortion correction to one of the test images like this one:
-![alt text][image2]
+The very first step in the pipeline is to undistort the camera image otherwise the image may have incorrect shapes which will result in lot of error.
+To undistort image, I used the OpenCV function called undistort as described in the point number 1. 
+
+The result of the undistortion on the test image looks like below -
+
+![Original test image][image3] ![Undistorted test image][image4]
+
+We can clearly see the difference in the shape of the car when we undistorted the image. 
+This image was then passed futher in the pipeline.
 
 #### 2. Describe how (and identify where in your code) you used color transforms, gradients or other methods to create a thresholded binary image.  Provide an example of a binary image result.
 
-I used a combination of color and gradient thresholds to generate a binary image (thresholding steps at lines # through # in `another_file.py`).  Here's an example of my output for this step.  (note: this is not actually from one of the test images)
+Function "combined_sobelx_hs_channel" in the main.py is responsible for filtering the image based on color transforms and gradients. Following points describe how I approached the problem.
 
-![alt text][image3]
+First I used S channel + Sobel x to try to filter images. 
+Saturation channel is good at identifying lane line where there are lines on light patches.
+Sobel x can be used to filter lines which are close to y-axis that is the vertical lines.
+
+Combination of these two was giving proper results in the first half, but the second half consisted of the shadow region where the S channel was not working well.
+
+I then combined a binary image using S (Saturation) channel and H (Hue) channel and adjusted the thresholds to provide proper results on both the tricky patches. 
+
+Finally the binary image was combined with Sobel X to get an even better result.
+
+Following is the result of combined s channel, h channel and sobel x in two patches -
+
+![Light patch orignal][image5] ![Light patch filtered][image6]
+![Shadow patch original][image7] ![Shadow patch filtered][image8]
+
+```python
+  combined_binary[((h_binary == 1) & (s_binary == 1)) | (sxbinary == 1)] = 1
+```
+
+The entire code for filtering images is in the "combined_sobelx_hs_channel" function.
 
 #### 3. Describe how (and identify where in your code) you performed a perspective transform and provide an example of a transformed image.
 
-The code for my perspective transform includes a function called `warper()`, which appears in lines 1 through 8 in the file `example.py` (output_images/examples/example.py) (or, for example, in the 3rd code cell of the IPython notebook).  The `warper()` function takes as inputs an image (`img`), as well as source (`src`) and destination (`dst`) points.  I chose the hardcode the source and destination points in the following manner:
+In order to transform the image into a "Bird eye" view, there are two functions "wrap" and "unwrap" written in the main.py file. These functions are responsible for taking an undistorted image and returing a wraped and unwarped binary respectively.
 
-```python
-src = np.float32(
-    [[(img_size[0] / 2) - 55, img_size[1] / 2 + 100],
-    [((img_size[0] / 6) - 10), img_size[1]],
-    [(img_size[0] * 5 / 6) + 60, img_size[1]],
-    [(img_size[0] / 2 + 55), img_size[1] / 2 + 100]])
-dst = np.float32(
-    [[(img_size[0] / 4), 0],
-    [(img_size[0] / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), img_size[1]],
-    [(img_size[0] * 3 / 4), 0]])
-```
+OpenCV provides a function called warpPerspective which takes a perspective transformation matrix as input and returns a warped image. 
 
-This resulted in the following source and destination points:
+To get the matrix I used getPerspectiveTransform function of OpenCV library. This function takes image co-ordinates as source and destination and return as matrix that can be used to strech and interpolate the image for transforming it. Liner interpolation was used to fill the new pixels.
+
+I used straight line test image to derive the co-ordinates of the polygon because we can see if the transform is resulting in parallel lane lines. This confirms that the transformation is good.
+
+Source and destination points (Bottom left to bottom right clockwise) -
 
 | Source        | Destination   | 
 |:-------------:|:-------------:| 
-| 585, 460      | 320, 0        | 
-| 203, 720      | 320, 720      |
-| 1127, 720     | 960, 720      |
-| 695, 460      | 960, 0        |
+| 270, 675      | 270, 675      | 
+| 587, 455      | 587, 20       |
+| 693, 455      | 693, 20       |
+| 1035, 675     | 1035, 675     |
 
-I verified that my perspective transform was working as expected by drawing the `src` and `dst` points onto a test image and its warped counterpart to verify that the lines appear parallel in the warped image.
+Following is the result of perpective transformation on the test image -
 
-![alt text][image4]
+![Orignal test image][image3] ![Perspective transformation test image][image9]
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
