@@ -184,7 +184,7 @@ Here's a [link to my video result](./project_output.mp4)
 
 The difficult part was to identify a combination of channels that works best on the two patches. In order to understand that, I will have to understand the color space of images fully.
 
-Another part was the sobel function where I faced difficulty. One improvement will be to add gradient filter so that it picks lines in specific gradient range. This will help in 
+Another part was the sobel function where I faced difficulty. One improvement will be to add gradient filter so that it picks lines in specific gradient range.
 
 Pipeline is likely to fail in following circumstances -
 If the noise is greater (like in the challenge video) and the lane lines are very close to the boundary of the road where it is difficult to filter lane and road boundaries.
