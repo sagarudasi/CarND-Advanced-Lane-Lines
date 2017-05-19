@@ -19,13 +19,16 @@ The goals / steps of this project are the following:
 
 [//]: # (Image References)
 
-[image1]: ./examples/undistort_output.png "Undistorted"
-[image2]: ./test_images/test1.jpg "Road Transformed"
-[image3]: ./examples/binary_combo_example.jpg "Binary Example"
-[image4]: ./examples/warped_straight_lines.jpg "Warp Example"
-[image5]: ./examples/color_fit_lines.jpg "Fit Visual"
-[image6]: ./examples/example_output.jpg "Output"
-[video1]: ./project_video.mp4 "Video"
+[image1]: ./output_images/1.png "Distorted original image"
+[image2]: ./output_images/2.png "Un-distorted image"
+[image3]: ./output_images/3.png "Original test image"
+[image4]: ./output_images/4.png "Un-distorted test image"
+[image5]: ./output_images/5.png "Test patch"
+[image6]: ./output_images/6.png "Combined sobelx and h and s channels"
+[image7]: ./output_images/7.png "Perspective transform test image"
+[image8]: ./output_images/8.png "Lane on transformed test image"
+[image9]: ./output_images/9.png "Un-warped final image"
+[image10]: ./output_images/10.png "Final output"
 
 ## [Rubric](https://review.udacity.com/#!/rubrics/571/view) Points
 
@@ -87,14 +90,9 @@ I then combined a binary image using S (Saturation) channel and H (Hue) channel 
 
 Finally the binary image was combined with Sobel X to get an even better result.
 
-Following is the result of combined s channel, h channel and sobel x in two patches -
+Following is the result of combined s channel, h channel and sobel x -
 
-![Light patch orignal][image5] ![Light patch filtered][image6]
-![Shadow patch original][image7] ![Shadow patch filtered][image8]
-
-```python
-  combined_binary[((h_binary == 1) & (s_binary == 1)) | (sxbinary == 1)] = 1
-```
+![Patch orignal][image5] ![Patch filtered][image6]
 
 The entire code for filtering images is in the "combined_sobelx_hs_channel" function.
 
@@ -117,16 +115,13 @@ Source and destination points (Bottom left to bottom right clockwise) -
 | 693, 455      | 693, 20       |
 | 1035, 675     | 1035, 675     |
 
-Following is the result of perpective transformation on the test image -
+Following is the result of perpective transformation on the test image and binary output -
 
-![Orignal test image][image3] ![Perspective transformation test image][image9]
+![Perspective transformation test image][image7]
 
 #### 4. Describe how (and identify where in your code) you identified lane-line pixels and fit their positions with a polynomial?
 
 At this point, we have a perspective transformed (bird eye view) filtered and undistored image to process. 
-
-Following is the resulted binary image -
-![Perspective transformed filterted and undistorted image][image10]
 
 As described in the CarND training, we can plot a histogram to see where the pixels are bright (i.e. probably the lane line starts there) and we can then use sliding window to find out other pixels that belongs to the left and right lanes.
 
@@ -137,7 +132,10 @@ Also, once we find the pixels, we can then limit our search area for the next fr
 I then used the numpy function "polyfit" to fit a second order polynomial to left and right lane lines -
 
 Following is the result of the sliding window and poly fit -
-![Lane lines on transformed image][image11]
+![Lane lines on transformed image][image8]
+
+After un-wrapping and combining with the final image, following is the result - 
+![Un-wraped final image][image9]
 
 
 #### 5. Describe how (and identify where in your code) you calculated the radius of curvature of the lane and the position of the vehicle with respect to center.
@@ -157,19 +155,16 @@ We need the factor that how much one pixel corresponds to in meters in real worl
 
 The left and right lane radius were then averaged out compute the estimated radius of the lane curvature.
 
-![Lane curvature][image12]
-
 To compute the car location in the lane, I used the camera frame center as reference (since the camera is fixed on car). Then I computed the center of the lower section of lane by dividing x co-ordinate at 0th pixel of left and right lane from bottom. I computed these value from the generated poly line of second order and max y co-ordinate.
 
 Diffence between the frame center and the above point was used as a measure of car location in the lane.
 
-![Car position][image13]
 
 #### 6. Provide an example image of your result plotted back down onto the road such that the lane area is identified clearly.
 
 Finally all the above data was combined and a result image as following was generated.
 
-![Final result][image14]
+![Final result][image10]
 
 Polygon of the shape of fitted polyline was drawn on top of lane to visualize the lane area generated using the above pipeline.
 The image was mutated in the fit_poly function only and it was unwarped on the original undistorted image.
@@ -179,7 +174,7 @@ The image was mutated in the fit_poly function only and it was unwarped on the o
 
 #### 1. Provide a link to your final video output.  Your pipeline should perform reasonably well on the entire project video (wobbly lines are ok but no catastrophic failures that would cause the car to drive off the road!).
 
-Here's a [link to my video result](./project_video.mp4)
+Here's a [link to my video result](./project_output.mp4)
 
 ---
 

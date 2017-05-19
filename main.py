@@ -7,6 +7,8 @@ import math
 from moviepy.editor import VideoFileClip
 
 # Calibrates the camera
+# Input: path to the captured chessboard images 
+# Output: Camera matrix and distortion coefficients 
 def calibrate(images):
     imgs = glob.glob(images)
 
@@ -37,6 +39,9 @@ def calibrate(images):
     # Calibrate the camera using opencv to find the camera matrix and distortion coef dist.
     return cv2.calibrateCamera(objpoints, imgpoints, gray.shape[::-1], None, None)
 
+# Filter lane lines from the image using colors and gradients
+# Input: Un-distorted image and various threshold values 
+# Output: Filtered combined image 
 def combined_sobelx_hs_channel(img, thresh_min=30, thresh_max=130, s_thresh_min=50, s_thresh_max=200, h_thresh_min=30, h_thresh_max=100):
     # Convert to HLS color space and separate the H and S channel
     hls = cv2.cvtColor(img, cv2.COLOR_RGB2HLS)
@@ -73,7 +78,9 @@ def combined_sobelx_hs_channel(img, thresh_min=30, thresh_max=130, s_thresh_min=
 
     return combined_binary
 
-
+# Warp the image to generate bird eye view
+# Input: Original image
+# Output: Warped image for bird eye view
 def warp(img):
     img_size = (img.shape[1], img.shape[0])
     
@@ -119,7 +126,9 @@ def warp(img):
     M = cv2.getPerspectiveTransform(src, dst)
     wimg = cv2.warpPerspective(img, M, img_size, flags=cv2.INTER_LINEAR)
     return wimg
-
+# Un-warp the image to generate the 3d view again 
+# Input: Warped image
+# Output: Original 3D representation
 def unwarp(img):
     img_size = (img.shape[1], img.shape[0])
     
@@ -164,7 +173,9 @@ def unwarp(img):
     Minv = cv2.getPerspectiveTransform(dst, src)
     return cv2.warpPerspective(img, Minv, img_size, flags=cv2.INTER_LINEAR)
 
-
+# Fit a 2nd order polynomial in the filtered image 
+# Input: Binary warped image and two polynomials 
+# Output: Polynomials and other required points in the image space 
 def fit_poly(binary_warped, left_fit=None, right_fit=None):
     # New blank image to hold data
     out_img = np.dstack((binary_warped, binary_warped, binary_warped))*255
@@ -283,8 +294,8 @@ def fit_poly(binary_warped, left_fit=None, right_fit=None):
     right_line_pts = np.hstack((right_line_window1, right_line_window2))
 
     # Draw the lane onto the warped blank image
-    cv2.fillPoly(window_img, np.int_([left_line_pts]), (255,0, 0))
-    cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,0, 255))
+    # cv2.fillPoly(window_img, np.int_([left_line_pts]), (255,0, 0))
+    # cv2.fillPoly(window_img, np.int_([right_line_pts]), (0,0, 255))
     # print("windowimg: "+str(window_img.shape))
     # print("outimg: "+str(out_img.shape))
     # resultimg = cv2.addWeighted(out_img, 1, window_img, 0.3, 0)
@@ -299,6 +310,9 @@ def fit_poly(binary_warped, left_fit=None, right_fit=None):
     return ploty, leftx, rightx, lefty, righty, left_fit, right_fit, left_fitx, right_fitx, window_img
 
 
+# Calculate the radius of the lane curvature
+# Input: Poly fit x and y co-ordinates of both lane lines 
+# Output: Radius of left and right lane in meters 
 def calculate_radii(ploty, leftx, rightx, lefty, righty):
 
     # Use the identified lane polynomials to calculate the radius of curvature of lane in real world space
@@ -316,6 +330,9 @@ def calculate_radii(ploty, leftx, rightx, lefty, righty):
     
     return left_curverad, right_curverad
 
+# Identify the position of car in the lane 
+# Input: Polynomials and image dimensions and conversion factor from pixels to meters
+# Output: Car position from center of lane in meters 
 def car_location(left_fit, right_fit, imagex, imagey, cfactor):
 
     # Calculate the position of car in the lane
@@ -330,6 +347,9 @@ def car_location(left_fit, right_fit, imagex, imagey, cfactor):
     carpos =  (camcenter - lanecenter) * cfactor
     return int(camcenter), int(lanecenter), carpos 
 
+# Main pipeline for the entire process 
+# Input: Distorted original camera frame 
+# Output: Final frame with visualizations 
 def process(img):
     global left_fit
     global right_fit 
@@ -417,37 +437,28 @@ if __name__ == "__main__":
     left_fit = None 
     right_fit = None
 
+    img = mpimg.imread('test_images/test6.jpg')
+
     videofile = cv2.VideoCapture('project_video.mp4')
+    #video = cv2.VideoWriter('output.avi',-1, 1, (img.shape[1],img.shape[0]))
 
     i=-1
     while(videofile.isOpened()):
         ret, frame = videofile.read()
         if ret == True:
             i = i + 1
-            # skip frames
-            # if i < 400:
-            #     continue
             result = process(frame)
             cv2.imshow('frame',result)
 
-            cv2.imwrite('output/frame_'+str(i)+'.jpg', result)
+            #video.write(result)
             
             if cv2.waitKey(1) & 0xFF == ord('q'):
                 break
         else:
             break
-
+    
+    #video.release()
     videofile.release()
     cv2.destroyAllWindows()
-
-    # ----------------------------------------------------- #
-    # Pipeline on frames from video and record output 
-    # ------------------------------------------------------#
-    # left_fit = None 
-    # right_fit = None
-    # outputfile = 'output.mp4'
-    # videoclip = VideoFileClip('project_video.mp4')
-    # processed_clip = videoclip.fl_image(process)
-    # processed_clip.write_videofile(outputfile, audio=False)
     
     
