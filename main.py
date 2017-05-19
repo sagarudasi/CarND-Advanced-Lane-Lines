@@ -4,6 +4,7 @@ import matplotlib.pyplot as plt
 import matplotlib.image as mpimg
 import glob
 import math
+from moviepy.editor import VideoFileClip
 
 # Calibrates the camera
 def calibrate(images):
@@ -327,7 +328,58 @@ def car_location(left_fit, right_fit, imagex, imagey, cfactor):
     # Car position calculated by taking difference in lane center and frame center
     camcenter = (imagex/2)
     carpos =  (camcenter - lanecenter) * cfactor
-    return int(camcenter), int(lanecenter), carpos
+    return int(camcenter), int(lanecenter), carpos 
+
+def process(img):
+    global left_fit
+    global right_fit 
+
+    dst = cv2.undistort(img, mtx, dist, None, mtx)
+    csimg = combined_sobelx_hs_channel(dst)
+    binary_warped = warp(csimg)
+
+    ploty, leftx, rightx, lefty, righty, left_fit, right_fit, left_fitx, right_fitx, resultimg = fit_poly(binary_warped, left_fit, right_fit)
+
+    left_curverad, right_curverad = calculate_radii(ploty, leftx, rightx, lefty, righty)
+
+    # binary_unwarped = unwarp(resultimg)
+    # finalimg = cv2.addWeighted(dst, 1, binary_unwarped, 0.8, 0)
+
+    warp_zero = np.zeros_like(binary_warped).astype(np.uint8)
+    color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
+
+    # Recast the x and y points into usable format for cv2.fillPoly()
+    pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
+    pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
+    pts = np.hstack((pts_left, pts_right))
+
+    # print("Left: "+str(pts_left.shape))
+    # print("Rgiht: "+str(pts_right.shape))
+
+    # Draw the lane onto the warped blank image
+    cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
+
+    # Warp the blank back to original image space using inverse perspective matrix (Minv)
+    newwarp = unwarp(color_warp)
+    # Combine the result with the original image
+    result = cv2.addWeighted(dst, 1, newwarp, 0.3, 0)
+
+    font = cv2.FONT_HERSHEY_SIMPLEX
+
+    camcenter, lanecenter, carpos = car_location(left_fit, right_fit, dst.shape[1], dst.shape[0], (3.7/700))
+
+    # cv2.circle(result,(result.shape[1]//2,result.shape[0]-20), 20, (0,0,255), -1)
+    # cv2.circle(result,(int(camcenter),result.shape[0]), 20, (255,0,0), -1)
+    # cv2.circle(result,(int(lanecenter),result.shape[0]-30), 20, (0,0,255), -1)
+    # actpos = (dst.shape[1]//2) - carpos
+    if carpos > 0:
+        msg = "Right of center "+str(abs(round(carpos, 2)))+" (m)"
+    else:
+        msg = "Left of center "+str(abs(round(carpos, 2)))+" (m)"
+
+    cv2.putText(result, str("Curvature: "+str((left_curverad+right_curverad)//2)+" (m)") ,(10,20), font, 0.5,(255,255,255),1,cv2.LINE_AA)
+    cv2.putText(result, str("Car position:  "+msg) ,(10,50), font, 0.5,(255,255,255),1,cv2.LINE_AA)
+    return result
 
 if __name__ == "__main__":
     # Start of main function and pipeline
@@ -350,105 +402,52 @@ if __name__ == "__main__":
     # Pipeline on singe image 
     # ------------------------------------------------------#
 
-    img = mpimg.imread('test_images/test4.jpg')
-    #img = mpimg.imread('crit_images/second/img_1045.jpg')
-
-    plt.imshow(img)
-    plt.show()
-    dst = cv2.undistort(img, mtx, dist, None, mtx)
-    plt.imshow(dst)
-    plt.show()
-    csimg = combined_sobelx_hs_channel(dst)
-    plt.imshow(csimg,  cmap='gray')
-    plt.show()
-    binary_warped = warp(csimg)
-    plt.imshow(binary_warped,  cmap='gray')
-    plt.show()
-
-    ploty, leftx, rightx, lefty, righty, left_fit, right_fit, left_fitx, right_fitx, resultimg = fit_poly(binary_warped)
-
-    left_curverad, right_curverad = calculate_radii(ploty, leftx, rightx, lefty, righty)
-
-    binary_unwarped = unwarp(resultimg)
-    plt.imshow(binary_unwarped)
-    plt.show()
-
-    # print("dst: "+str(dst.shape)+str(dst.shape[1])+" "+str(dst.shape[0]))
-    # print("resultimg: "+str(resultimg.shape)+str(resultimg.shape[1])+" "+str(resultimg.shape[0]))
-    finalimg = cv2.addWeighted(dst, 1, binary_unwarped, 0.8, 0)
-    #cv2.circle(finalimg,(finalimg.shape[1]//2,finalimg.shape[0]-20), 20, (0,0,255), -1)
-    #cv2.circle(finalimg,(car_location(leftx,rightx),finalimg.shape[0]-60), 20, (255,0,0), -1)
-    plt.imshow(finalimg)
-    plt.show()
-
-    # ----------------------------------------------------- #
-    # Pipeline on video 
-    # ------------------------------------------------------#
-
-    # videofile = cv2.VideoCapture('project_video.mp4')
-
     # left_fit = None 
     # right_fit = None 
 
-    # i=-1
-    # while(videofile.isOpened()):
-    #     ret, frame = videofile.read()
-    #     i = i + 1
-    #     # if i < 400:
-    #     #     continue
-    #     dst = cv2.undistort(frame, mtx, dist, None, mtx)
-    #     csimg = combined_sobelx_hs_channel(dst)
-    #     binary_warped = warp(csimg)
+    # img = mpimg.imread('test_images/test6.jpg')
+    # result = process(img)
+    # plt.imshow(result)
+    # plt.show()
 
-    #     ploty, leftx, rightx, lefty, righty, left_fit, right_fit, left_fitx, right_fitx, resultimg = fit_poly(binary_warped, left_fit, right_fit)
+    # ----------------------------------------------------- #
+    # Pipeline on frames from video and live output 
+    # ------------------------------------------------------#
 
-    #     left_curverad, right_curverad = calculate_radii(ploty, leftx, rightx, lefty, righty)
+    left_fit = None 
+    right_fit = None
 
-    #     # binary_unwarped = unwarp(resultimg)
-    #     # finalimg = cv2.addWeighted(dst, 1, binary_unwarped, 0.8, 0)
+    videofile = cv2.VideoCapture('project_video.mp4')
 
-    #     warp_zero = np.zeros_like(binary_warped).astype(np.uint8)
-    #     color_warp = np.dstack((warp_zero, warp_zero, warp_zero))
+    i=-1
+    while(videofile.isOpened()):
+        ret, frame = videofile.read()
+        if ret == True:
+            i = i + 1
+            # skip frames
+            # if i < 400:
+            #     continue
+            result = process(frame)
+            cv2.imshow('frame',result)
 
-    #     # Recast the x and y points into usable format for cv2.fillPoly()
-    #     pts_left = np.array([np.transpose(np.vstack([left_fitx, ploty]))])
-    #     pts_right = np.array([np.flipud(np.transpose(np.vstack([right_fitx, ploty])))])
-    #     pts = np.hstack((pts_left, pts_right))
+            cv2.imwrite('output/frame_'+str(i)+'.jpg', result)
+            
+            if cv2.waitKey(1) & 0xFF == ord('q'):
+                break
+        else:
+            break
 
-    #     # print("Left: "+str(pts_left.shape))
-    #     # print("Rgiht: "+str(pts_right.shape))
+    videofile.release()
+    cv2.destroyAllWindows()
 
-    #     # Draw the lane onto the warped blank image
-    #     cv2.fillPoly(color_warp, np.int_([pts]), (0,255, 0))
-
-    #     # Warp the blank back to original image space using inverse perspective matrix (Minv)
-    #     newwarp = unwarp(color_warp)
-    #     # Combine the result with the original image
-    #     result = cv2.addWeighted(dst, 1, newwarp, 0.3, 0)
-
-    #     font = cv2.FONT_HERSHEY_SIMPLEX
-
-    #     camcenter, lanecenter, carpos = car_location(left_fit, right_fit, dst.shape[1], dst.shape[0], (3.7/700))
-
-    #     # cv2.circle(result,(result.shape[1]//2,result.shape[0]-20), 20, (0,0,255), -1)
-    #     # cv2.circle(result,(int(camcenter),result.shape[0]), 20, (255,0,0), -1)
-    #     # cv2.circle(result,(int(lanecenter),result.shape[0]-30), 20, (0,0,255), -1)
-    #     # actpos = (dst.shape[1]//2) - carpos
-    #     if carpos > 0:
-    #         msg = "Right of center "+str(abs(round(carpos, 2)))+" (m)"
-    #     else:
-    #         msg = "Left of center "+str(abs(round(carpos, 2)))+" (m)"
-
-        
-
-    #     cv2.putText(result, str("Curvature: "+str((left_curverad+right_curverad)//2)+" (m)") ,(10,20), font, 0.5,(255,255,255),1,cv2.LINE_AA)
-    #     cv2.putText(result, str("Car position:  "+msg) ,(10,50), font, 0.5,(255,255,255),1,cv2.LINE_AA)
-
-    #     cv2.imshow('frame',result)
-        
-    #     #cv2.imwrite('img_'+str(i)+'.jpg',frame)
-    #     if cv2.waitKey(1) & 0xFF == ord('q'):
-    #         break
-
-    # videofile.release()
-    # cv2.destroyAllWindows()
+    # ----------------------------------------------------- #
+    # Pipeline on frames from video and record output 
+    # ------------------------------------------------------#
+    # left_fit = None 
+    # right_fit = None
+    # outputfile = 'output.mp4'
+    # videoclip = VideoFileClip('project_video.mp4')
+    # processed_clip = videoclip.fl_image(process)
+    # processed_clip.write_videofile(outputfile, audio=False)
+    
+    
